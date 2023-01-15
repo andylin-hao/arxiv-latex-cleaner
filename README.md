@@ -8,7 +8,7 @@ arXiv.
 ## Example call:
 
 ```bash
-arxiv_latex_cleaner /path/to/latex --im_size 500 --images_whitelist='{"images/im.png":2000}'
+arxiv_latex_cleaner /path/to/latex --resize_images --im_size 500 --images_whitelist='{"images/im.png":2000}'
 ```
 
 Or simply from a config file
@@ -114,7 +114,7 @@ patterns.
 ## Usage:
 
 ```
-usage: arxiv_latex_cleaner@v0.1.27 [-h] [--resize_images] [--im_size IM_SIZE]
+usage: arxiv_latex_cleaner@v0.1.30 [-h] [--resize_images] [--im_size IM_SIZE]
                                    [--compress_pdf]
                                    [--pdf_im_resolution PDF_IM_RESOLUTION]
                                    [--images_whitelist IMAGES_WHITELIST]

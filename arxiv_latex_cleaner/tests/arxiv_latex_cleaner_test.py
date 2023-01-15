@@ -323,6 +323,15 @@ class UnitTests(parameterized.TestCase):
           'text_in': 'A\n\\todo{B\n\\todo{C}}\nD\n\\end{document}',
           'keep_text': True,
           'true_output': 'A\nB\nC\nD\n\\end{document}'
+      }, {
+          'testcase_name':
+              'deeply_nested_command_keep_text',
+          'text_in':
+              'A\n\\todo{B\n\\emph{C\\footnote{\\textbf{D}}}}\nE\n\\end{document}',
+          'keep_text':
+              True,
+          'true_output':
+              'A\nB\n\\emph{C\\footnote{\\textbf{D}}}\nE\n\\end{document}'
       })
   def test_remove_command(self, text_in, keep_text, true_output):
     self.assertEqual(
@@ -377,6 +386,10 @@ class UnitTests(parameterized.TestCase):
           'testcase_name': 'if_removed_backslash',
           'text_in': '\\iffalse\nFoo\n\\fi\\end{document}',
           'true_output': '\\end{document}'
+      }, {
+          'testcase_name': 'commands_not_removed',
+          'text_in': '\\newcommand\\figref[1]{Figure~\\ref{fig:\#1}}',
+          'true_output': '\\newcommand\\figref[1]{Figure~\\ref{fig:\#1}}'
       })
   def test_remove_iffalse_block(self, text_in, true_output):
     self.assertEqual(
