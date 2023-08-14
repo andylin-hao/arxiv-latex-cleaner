@@ -138,8 +138,10 @@ def _remove_command(text, command, keep_text=False):
 
 def _remove_environment(text, environment):
   """Removes '\\begin{environment}*\\end{environment}' from 'text'."""
+  # Need to escape '{', to not trigger fuzzy matching if `environment` starts
+  # with one of 'i', 'd', 's', or 'e'
   return regex.sub(
-      r'\\begin{' + environment + r'}[\s\S]*?\\end{' + environment + r'}', '',
+      r'\\begin\{' + environment + r'}[\s\S]*?\\end\{' + environment + r'}', '',
       text)
 
 
@@ -224,6 +226,8 @@ def _remove_comments_and_commands_to_delete(content, parameters):
   content = [_remove_comments_inline(line) for line in content]
   content = _remove_environment(''.join(content), 'comment')
   content = _remove_iffalse_block(content)
+  for environment in parameters.get('environments_to_delete', []):
+    content = _remove_environment(content, environment)
   for command in parameters.get('commands_only_to_delete', []):
     content = _remove_command(content, command, True)
   for command in parameters['commands_to_delete']:
@@ -254,6 +258,25 @@ def _replace_tikzpictures(content, figures):
   return content
 
 
+def _replace_includesvg(content, svg_inkscape_files):
+
+  def repl_svg(matchobj):
+    svg_path = matchobj.group(2)
+    svg_filename = os.path.basename(svg_path)
+    # search in svg_inkscape split if pdf_tex file is available
+    matching_pdf_tex_files = _keep_pattern(
+        svg_inkscape_files, ['/' + svg_filename + '-tex.pdf_tex'])
+    if len(matching_pdf_tex_files) == 1:
+      options = '' if matchobj.group(1) is None else matchobj.group(1)
+      return f'\\includeinkscape{options}{{{matching_pdf_tex_files[0]}}}'
+    else:
+      return matchobj.group(0)
+
+  content = regex.sub(r'\\includesvg(\[.*?\])?{(.*?)}', repl_svg, content)
+
+  return content
+
+
 def _resize_and_copy_figure(filename, origin_folder, destination_folder,
                             resize_image, image_size, compress_pdf,
                             pdf_resolution):
@@ -268,7 +291,7 @@ def _resize_and_copy_figure(filename, origin_folder, destination_folder,
     if max(im.size) > image_size:
       im = im.resize(
           tuple([int(x * float(image_size) / max(im.size)) for x in im.size]),
-          Image.ANTIALIAS)
+          Image.Resampling.LANCZOS)
     if os.path.splitext(filename)[1].lower() in ['.jpg', '.jpeg']:
       im.save(os.path.join(destination_folder, filename), 'JPEG', quality=90)
     elif os.path.splitext(filename)[1].lower() in ['.png']:
@@ -311,10 +334,10 @@ def _copy_only_referenced_non_tex_not_in_root(parameters, contents, splits):
 
 def _resize_and_copy_figures_if_referenced(parameters, contents, splits):
   image_size = collections.defaultdict(lambda: parameters['im_size'])
-  image_size.update(parameters['images_whitelist'])
+  image_size.update(parameters['images_allowlist'])
   pdf_resolution = collections.defaultdict(
       lambda: parameters['pdf_im_resolution'])
-  pdf_resolution.update(parameters['images_whitelist'])
+  pdf_resolution.update(parameters['images_allowlist'])
   for image_file in _keep_only_referenced(
       splits['figures'], contents, strict=False):
     _resize_and_copy_figure(
@@ -453,6 +476,12 @@ def _split_all_files(parameters):
   else:
     file_splits['external_tikz_figures'] = []
 
+  if parameters.get('svg_inkscape', None) is not None:
+    file_splits['svg_inkscape'] = _keep_pattern(
+        file_splits['all'], [parameters['svg_inkscape']])
+  else:
+    file_splits['svg_inkscape'] = []
+
   return file_splits
 
 
@@ -471,7 +500,7 @@ def run_arxiv_cleaner(parameters):
       r'\.aux$', r'\.sh$', r'\.blg$', r'\.brf$', r'\.log$', r'\.out$', r'\.ps$',
       r'\.dvi$', r'\.synctex.gz$', '~$', r'\.backup$', r'\.gitignore$',
       r'\.DS_Store$', r'\.svg$', r'^\.idea', r'\.dpth$', r'\.md5$', r'\.dep$',
-      r'\.auxlock$'
+      r'\.auxlock$', r'\.fls$', r'\.fdb_latexmk$'
   ]
 
   if not parameters['keep_bib']:
@@ -498,6 +527,11 @@ def run_arxiv_cleaner(parameters):
     logging.info('Removing comments in file %s.', tex_file)
     tex_contents[tex_file] = _remove_comments_and_commands_to_delete(
         tex_contents[tex_file], parameters)
+
+  for tex_file in tex_contents:
+    logging.info('Replacing \\includesvg calls in file %s.', tex_file)
+    tex_contents[tex_file] = _replace_includesvg(tex_contents[tex_file],
+                                                 splits['svg_inkscape'])
 
   for tex_file in tex_contents:
     logging.info('Replacing Tikz Pictures in file %s.', tex_file)

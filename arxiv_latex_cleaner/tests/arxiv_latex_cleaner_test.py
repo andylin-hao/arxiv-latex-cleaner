@@ -28,12 +28,12 @@ def make_args(
     im_size=500,
     compress_pdf=False,
     pdf_im_resolution=500,
-    images_whitelist=None,
+    images_allowlist=None,
     commands_to_delete=None,
     use_external_tikz='foo/bar/tikz',
 ):
-  if images_whitelist is None:
-    images_whitelist = {}
+  if images_allowlist is None:
+    images_allowlist = {}
   if commands_to_delete is None:
     commands_to_delete = []
   args = {
@@ -42,7 +42,7 @@ def make_args(
       'im_size': im_size,
       'compress_pdf': compress_pdf,
       'pdf_im_resolution': pdf_im_resolution,
-      'images_whitelist': images_whitelist,
+      'images_allowlist': images_allowlist,
       'commands_to_delete': commands_to_delete,
       'use_external_tikz': use_external_tikz,
   }
@@ -223,7 +223,7 @@ class UnitTests(parameterized.TestCase):
               'args and config provided',
           'args':
               make_args(
-                  images_whitelist={'path1/': 1000},
+                  images_allowlist={'path1/': 1000},
                   commands_to_delete=[r'\todo1']),
           'config_params':
               make_args(
@@ -232,13 +232,13 @@ class UnitTests(parameterized.TestCase):
                   1000,
                   True,
                   1000,
-                  images_whitelist={'path2/': 1000},
+                  images_allowlist={'path2/': 1000},
                   commands_to_delete=[r'\todo2'],
                   use_external_tikz='foo_/bar_/tikz_',
               ),
           'final_args':
               make_args(
-                  images_whitelist={
+                  images_allowlist={
                       'path1/': 1000,
                       'path2/': 1000
                   },
@@ -478,6 +478,46 @@ class UnitTests(parameterized.TestCase):
         arxiv_latex_cleaner._replace_tikzpictures(text_in, figures_in),
         true_output)
 
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'no_includesvg',
+          'text_in': 'Foo\n',
+          'figures_in': ['ext_svg/test1-tex.pdf_tex',
+                         'ext_svg/test2-tex.pdf_tex'],
+          'true_output': 'Foo\n'
+      }, {
+          'testcase_name':
+              'includesvg_no_match',
+          'text_in':
+              'Foo\\includesvg{test_no_match}\nFoo',
+          'figures_in': ['ext_svg/test1-tex.pdf_tex',
+                         'ext_svg/test2-tex.pdf_tex'],
+          'true_output':
+              'Foo\\includesvg{test_no_match}\nFoo',
+      }, {
+          'testcase_name':
+              'includesvg_match',
+          'text_in':
+              'Foo\\includesvg{test2}\nFoo',
+          'figures_in': ['ext_svg/test1-tex.pdf_tex',
+                         'ext_svg/test2-tex.pdf_tex'],
+          'true_output':
+              'Foo\\includeinkscape{ext_svg/test2-tex.pdf_tex}\nFoo'
+      }, {
+          'testcase_name':
+              'includesvg_match_with_options',
+          'text_in':
+              'Foo\\includesvg[width=\\linewidth]{test2}\nFoo',
+          'figures_in': ['ext_svg/test1-tex.pdf_tex',
+                         'ext_svg/test2-tex.pdf_tex'],
+          'true_output':
+              'Foo\\includeinkscape[width=\\linewidth]{ext_svg/test2-tex.pdf_tex}\nFoo'
+      })
+  def test_replace_includesvg(self, text_in, figures_in, true_output):
+    self.assertEqual(
+        arxiv_latex_cleaner._replace_includesvg(text_in, figures_in),
+        true_output)
+
   @parameterized.named_parameters(*make_search_reference_tests())
   def test_search_reference_weak(self, filenames, contents, strict,
                                  true_outputs):
@@ -703,7 +743,7 @@ class IntegrationTests(unittest.TestCase):
 
     arxiv_latex_cleaner.run_arxiv_cleaner({
         'input_folder': 'tex',
-        'images_whitelist': {
+        'images_allowlist': {
             'images/im2_included.jpg': 200,
             'images/im3_included.png': 400,
         },
@@ -713,6 +753,7 @@ class IntegrationTests(unittest.TestCase):
         'pdf_im_resolution': 500,
         'commands_to_delete': ['mytodo'],
         'commands_only_to_delete': ['red'],
+        'environments_to_delete': ['mynote'],
         'use_external_tikz': 'ext_tikz',
         'keep_bib': False
     })
